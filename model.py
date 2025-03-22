@@ -127,6 +127,7 @@ class EncoderBlock(nn.Module):
         self.residual_connection = nn.ModuleList([ResidualConnection(dropout) for _ in range(2)])
 
     def forward(self,x, src_mask):
+        ## src_mask -> This is added to avoid interaction of padding words with other words.
         x = self.residual_connection[0](x, lambda x: self.self_attn_block(x,x,x, src_mask))
         x = self.residual_connection[1](x, self.feed_forward_block)
         return x
@@ -207,10 +208,11 @@ def build_transformer(src_vocab_size: int, tgt_vocab_size: int, src_seq_len: int
     src_embed = InputEmbedding(d_model, src_vocab_size)
     tgt_embed = InputEmbedding(d_model, tgt_vocab_size)
 
+    # Create the position encoding layers
     src_pos = PositionEncoding(d_model, src_seq_len, dropout)
     tgt_pos = PositionEncoding(d_model, tgt_seq_len, dropout)
 
-    # Create the position encoding layers
+    # Create the encoder blocks
     encoder_blocks = []
     for _ in range(N):
         encoder_self_attn_block = MultiHeadAttentionBlock(d_model, h, dropout)
