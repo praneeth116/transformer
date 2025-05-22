@@ -10,6 +10,7 @@ class InputEmbedding(nn.Module): ## Converts a token into 512 dimensional vector
         self.embedding = nn.Embedding(vocab_size, d_model) ## Creates a lookuop table from tokens to  vectors
 
     def forward(self, x):
+        x = x.long()
         return self.embedding(x)*math.sqrt(self.d_model)
     
 class PositionEncoding(nn.Module): ## For giving the information about each token in the sentence.
@@ -37,7 +38,7 @@ class PositionEncoding(nn.Module): ## For giving the information about each toke
         self.register_buffer('pe',pe)
 
     def forward(self, x):
-        x = x + (self.pe[:, :x.shape[1], :]).requires_grad(False) #As we don't want the positional encodings to change during training.
+        x = x + (self.pe[:, :x.shape[1], :]).requires_grad_(False) #As we don't want the positional encodings to change during training.
         return self.dropout(x)
         
 class LayerNormalization(nn.Module):
@@ -66,7 +67,7 @@ class MultiHeadAttentionBlock(nn.Module):
     def __init__(self, d_model: int, h: int, dropout: float):
         super().__init__()
         self.d_model = d_model
-        self.h = h
+        self.h = h # No.of heads
         assert d_model % h == 0, "d_model is not divisible by h"
 
         self.d_k = d_model // h
@@ -128,6 +129,7 @@ class EncoderBlock(nn.Module):
 
     def forward(self,x, src_mask):
         ## src_mask -> This is added to avoid interaction of padding words with other words.
+        ### x -> is a sentence not just a single token
         x = self.residual_connection[0](x, lambda x: self.self_attn_block(x,x,x, src_mask))
         x = self.residual_connection[1](x, self.feed_forward_block)
         return x
@@ -147,11 +149,15 @@ class DecoderBlock(nn.Module):
     def __init__(self, self_attn_block: MultiHeadAttentionBlock, cross_attn_block: MultiHeadAttentionBlock, feed_forward_block: FeedForwardBlock, dropout: float):
         super().__init__()
         self.self_attn_block = self_attn_block
+        # In self_attn_block Q, K, V come from the same
         self.cross_attn_block = cross_attn_block
+        # In cross_attn_block K, V come from the encoder and Q comes from the decoder. 
         self.feed_forward_block = feed_forward_block
         self.residual_connections = nn.ModuleList([ResidualConnection(dropout) for _ in range(3)])
 
     def forward(self, x, encoder_output, src_mask, tgt_mask):
+        # src_mask -> applied to the encoder input (to avoid interactions with the paddings)
+        # tgt_mask -> applied to the decoder input
         x = self.residual_connections[0](x, lambda x: self.self_attn_block(x, x, x, tgt_mask))
         x = self.residual_connections[1](x, lambda x: self.cross_attn_block(x, encoder_output, encoder_output, src_mask))
         x = self.residual_connections[2](x, self.feed_forward_block)
